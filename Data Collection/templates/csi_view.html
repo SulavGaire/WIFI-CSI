@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSI Visualization - {{ sample_id }}</title>
+</head>
+<body>
+    <h1>Sample: {{ sample_id }}</h1>
+
+    {% if image_data %}
+        <h2>Image</h2>
+        <img src="data:image/jpeg;base64,{{ image_data }}" style="max-width: 500px;">
+    {% else %}
+        <p>No image found.</p>
+    {% endif %}
+
+    {% if heatmap_data %}
+        <h2>CSI Spectrogram</h2>
+        <img src="data:image/png;base64,{{ heatmap_data }}" style="max-width: 100%;">
+    {% else %}
+        <p>No CSI data found.</p>
+    {% endif %}
+
+    <p><a href="{{ url_for('visualize_index') }}">Back to CSI Samples</a></p>
+</body>
+</html>

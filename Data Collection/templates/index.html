@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSI-Image Capture</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Flashing red recording indicator */
+        #recording-indicator {
+            display: none;
+            font-weight: bold;
+            color: white;
+            background-color: red;
+            padding: 8px 16px;
+            border-radius: 6px;
+            margin-top: 10px;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            50% { opacity: 0.3; }
+        }
+
+        /* Success banner after save */
+        #save-success {
+            display: none;
+            font-weight: bold;
+            color: white;
+            background-color: green;
+            padding: 8px 16px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSI-Image Data Collection</h1>
+    
+    <div id="camera">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+    </div>
+    
+    <div id="csi-status">
+        <span id="csi-count">0</span> CSI packets in buffer
+    </div>
+    
+    <label for="tag-select">Select Existing Tag:</label>
+    <select id="tag-select">
+        <option value="">-- Select a tag --</option>
+    </select>
+    
+    <label for="new-tag">Or Enter New Tag:</label>
+    <input type="text" id="new-tag" placeholder="e.g., chair">
+    
+    <label for="duration">Recording Duration (seconds):</label>
+    <input type="number" id="duration" min="1" value="10" required>
+    
+    <button id="capture-btn">Capture Images & CSI</button>
+    <div id="progress-container" style="display: none;">
+        <progress id="progress" value="0" max="100"></progress>
+    </div>
+    <div id="status">Ready to capture</div>
+    <div id="recording-indicator">📡 Collecting data...</div>
+    <div id="save-success">✅ Data saved to dataset folder!</div>
+    
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const captureBtn = document.getElementById('capture-btn');
+        const statusDiv = document.getElementById('status');
+        const csiCountSpan = document.getElementById('csi-count');
+        const tagSelect = document.getElementById('tag-select');
+        const newTagInput = document.getElementById('new-tag');
+        const progressContainer = document.getElementById('progress-container');
+        const progress = document.getElementById('progress');
+        const recordingIndicator = document.getElementById('recording-indicator');
+        const saveSuccess = document.getElementById('save-success');
+        let stream = null;
+        let csiAvailable = false;
+        let images = [];
+        let frameInterval;
+        let isCapturing = false;
+        
+        async function fetchTags() {
+            try {
+                const response = await fetch('/tags');
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                const tags = await response.json();
+                tagSelect.innerHTML = '<option value="">-- Select a tag --</option>';
+                tags.forEach(tag => {
+                    const option = document.createElement('option');
+                    option.value = tag;
+                    option.textContent = tag;
+                    tagSelect.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Error fetching tags:', err);
+                statusDiv.textContent = 'Error loading tags: ' + err.message;
+            }
+        }
+        
+        function checkCSIStatus() {
+            fetch('/csi-status')
+                .then(response => response.json())
+                .then(data => {
+                    csiAvailable = data.available;
+                    csiCountSpan.textContent = data.packet_count || 0;
+                    
+                    if (!csiAvailable) {
+                        statusDiv.textContent = 'Waiting for CSI data...';
+                        captureBtn.disabled = true;
+                    } else if (!getSelectedTag() || !document.getElementById('duration').value) {
+                        statusDiv.textContent = 'Please select or enter a tag and duration';
+                        captureBtn.disabled = true;
+                    } else {
+                        statusDiv.textContent = 'Ready to capture';
+                        captureBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('CSI status check failed:', error);
+                    statusDiv.textContent = 'Error checking CSI status: ' + error.message;
+                });
+            
+            setTimeout(checkCSIStatus, 1000);
+        }
+        
+        function getSelectedTag() {
+            const newTag = newTagInput.value.trim();
+            if (newTag) return newTag;
+            return tagSelect.value;
+        }
+        
+        async function initCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    },
+                    audio: false 
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                statusDiv.textContent = 'Error accessing camera: ' + err.message;
+                console.error('Camera error:', err);
+            }
+        }
+        
+        function captureImageFrame() {
+            if (!isCapturing) return;
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            canvas.toBlob(blob => {
+                const timestamp = new Date().toISOString();
+                images.push({
+                    blob: blob,
+                    index: images.length,
+                    timestamp: timestamp
+                });
+            }, 'image/jpeg', 0.95);
+        }
+        
+        captureBtn.addEventListener('click', async () => {
+            if (isCapturing) return;
+            
+            const tagName = getSelectedTag();
+            const duration = parseInt(document.getElementById('duration').value);
+            
+            if (!tagName || isNaN(duration) || duration <= 0) {
+                statusDiv.textContent = 'Please provide a valid tag and duration';
+                return;
+            }
+            
+            if (!stream) {
+                statusDiv.textContent = 'Camera not available';
+                return;
+            }
+            
+            if (!csiAvailable) {
+                statusDiv.textContent = 'CSI data not available';
+                return;
+            }
+            
+            statusDiv.textContent = 'Recording...';
+            recordingIndicator.style.display = 'inline-block';
+            saveSuccess.style.display = 'none';
+            captureBtn.disabled = true;
+            
+            try {
+                const startResponse = await fetch('/start_recording', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tag_name: tagName })
+                });
+                const startResult = await startResponse.json();
+                if (!startResult.success) {
+                    throw new Error(startResult.error || 'Failed to start recording');
+                }
+                
+                images = [];
+                isCapturing = true;
+                progressContainer.style.display = 'block';
+                progress.value = 0;
+                
+                const startTime = Date.now();
+                const frameDelay = 1000 / 30;
+                frameInterval = setInterval(captureImageFrame, frameDelay);
+                
+                const progressInterval = setInterval(() => {
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    const progressValue = (elapsed / duration) * 100;
+                    progress.value = progressValue;
+                    
+                    if (elapsed >= duration) {
+                        clearInterval(progressInterval);
+                        clearInterval(frameInterval);
+                        isCapturing = false;
+                        
+                        statusDiv.textContent = 'Processing...';
+                        
+                        const formData = new FormData();
+                        formData.append('tag_name', tagName);
+                        
+                        const metadata = images.map(img => ({
+                            index: img.index,
+                            timestamp: img.timestamp
+                        }));
+                        formData.append('metadata', JSON.stringify(metadata));
+                        
+                        images.forEach(img => {
+                            formData.append('images', img.blob, `frame_${img.index}.jpg`);
+                        });
+                        
+                        fetch('/stop_recording', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(result => {
+                            if (result.success) {
+                                statusDiv.textContent = `Recording finished! ID: ${result.sample_id} (${result.num_images} images, ${result.num_csi_packets} CSI packets)`;
+                                fetchTags();
+                                saveSuccess.style.display = 'inline-block';
+                            } else {
+                                statusDiv.textContent = 'Error: ' + (result.error || 'Unknown error');
+                            }
+                        })
+                        .catch(error => {
+                            statusDiv.textContent = 'Server error: ' + error.message;
+                        })
+                        .finally(() => {
+                            captureBtn.disabled = false;
+                            progressContainer.style.display = 'none';
+                            recordingIndicator.style.display = 'none';
+                        });
+                    }
+                }, 100);
+            } catch (err) {
+                statusDiv.textContent = 'Error starting recording: ' + err.message;
+                console.error('Start recording error:', err);
+                captureBtn.disabled = false;
+                progressContainer.style.display = 'none';
+                recordingIndicator.style.display = 'none';
+                if (frameInterval) clearInterval(frameInterval);
+                isCapturing = false;
+            }
+        });
+        
+        window.addEventListener('load', () => {
+            initCamera();
+            fetchTags();
+            checkCSIStatus();
+        });
+        
+        tagSelect.addEventListener('change', checkCSIStatus);
+        newTagInput.addEventListener('input', checkCSIStatus);
+        document.getElementById('duration').addEventListener('input', checkCSIStatus);
+    </script>
+</body>
+</html>
