@@ -1,0 +1,73 @@
+# ==============================
+# Python
+# ==============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+venv/
+.env/
+env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Byte-compiled / optimized / DLL files
+*.dll
+*.pdb
+
+# ==============================
+# OS-specific
+# ==============================
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# ==============================
+# Logs & Cache
+# ==============================
+*.log
+*.tmp
+*.cache/
+.cache/
+*.bak
+
+# ==============================
+# Machine Learning
+# ==============================
+# Model weights
+*.pt
+*.pth
+*.onnx
+
+# Export files
+*.zip
+*.tar
+*.tar.gz
+
+# Dataset
+Data Collection/dataset/*
+!Data Collection/dataset/.gitkeep
+
+# ==============================
+# IDE settings
+# ==============================
+# VS Code
+.vscode/
+
+# PyCharm / IntelliJ
+.idea/
+
+# Other IDEs
+*.sublime-project
+*.sublime-workspace
