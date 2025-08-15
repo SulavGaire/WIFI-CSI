@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSI Dataset Visualization</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .sample-list { display: flex; flex-wrap: wrap; }
+        .plot-container { display: flex; flex-wrap: wrap; margin-top: 20px; }
+        .plot { margin: 10px; border: 1px solid #ccc; padding: 5px; background: #fafafa; }
+        img { max-width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+<h1>CSI Dataset Visualization & Comparison</h1>
+
+<form method="POST">
+    <div class="sample-list">
+        {% for tag, name, path in samples %}
+        <label style="margin:5px;">
+            <input type="checkbox" name="samples" value="{{tag}}::{{name}}">
+            {{ tag }} / {{ name }}
+        </label>
+        {% endfor %}
+    </div>
+    <br>
+    <input type="submit" value="Compare Selected">
+</form>
+
+{% if plots %}
+<h2>Visualizations</h2>
+<div class="plot-container">
+    {% for p in plots %}
+    <div class="plot">
+        <h3>{{ p.title }}</h3>
+        <img src="data:image/png;base64,{{ p.mag_img }}" alt="Magnitude Heatmap">
+        <img src="data:image/png;base64,{{ p.phase_img }}" alt="Phase Heatmap">
+        <img src="data:image/png;base64,{{ p.const_img }}" alt="Constellation">
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+</body>
+</html>

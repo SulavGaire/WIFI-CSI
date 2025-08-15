@@ -58,6 +58,8 @@ Desktop.ini
 # Dataset
 Data Collection/dataset/*
 !Data Collection/dataset/.gitkeep
+Data Collection/ssl/*
+!Data Collection/ssl/.gitkeep
 
 # ==============================
 # IDE settings
